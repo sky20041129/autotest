@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+
+set -eu
+
+SudoPW="didi1234"
+
+function error_exit() {
+    printf "\E[1;33;46m"
+    echo $1
+    read -rsp $'Press any key to exit ...\n' -n 1 key  
+    exit 1
+}
+
+## [NIC]
+echo ""
+echo "Start [NIC] test ..."
+echo ""
+
+echo "ping to 192.168.7.1 ..."
+if ping -c 5 -W 3 192.168.7.1 &> /dev/null
+then
+    echo "ping 192.168.7.1 is pass."
+else
+    error_exit "ping 192.168.7.1 is  fail."
+fi
+
+echo "ping to 192.168.8.1 ..."
+if ping -c 5 -W 3 192.168.8.1 &> /dev/null
+then
+    echo "ping 192.168.8.1 is pass."
+else
+    error_exit "ping 192.168.8.1 is fail."
+fi
+
+echo "ping to 192.168.10.110 ..."
+if ping -c 5 -W 3 192.168.10.110 &> /dev/null
+then
+    echo "ping 192.168.10.110 is pass."
+else
+    error_exit "ping 192.168.10.110 is fail."
+fi
+
+## [PCAN]
+echo ""
+echo "Start [PCAN] test ..."
+echo ""
+
+# parameter setting
+count=1
+CandumpTime=$(( ($count*8)*1000 ))
+
+if [ -f "CANtestResult.txt" ]; then
+    rm CANtestResult.txt
+fi
+# ---------------------------------------------------------------------
+echo -e "Start CAN bus Test! \a \n"
+
+# Start to receive
+# -T <msecs>  (terminate after <msecs> without any reception)
+candump can0 can1 can2 can3 can4 can5 can6 can7 -T $(($CandumpTime + 1000)) > CANtestResult.txt &
+
+# Start to transmit
+cangen can0 -D 0011AABB -L 4 -x -n $count
+cangen can1 -D 1100BBAA -L 4 -x -n $count
+cangen can2 -D 2233CCDD -L 4 -x -n $count
+cangen can3 -D 3322DDCC -L 4 -x -n $count
+cangen can4 -D 4455EEFF -L 4 -x -n $count
+cangen can5 -D 5544FFEE -L 4 -x -n $count
+cangen can6 -D 6677ABCD -L 4 -x -n $count
+cangen can7 -D 7766CDAB -L 4 -x -n $count
+wait
+
+if [ $(cat CANtestResult.txt | grep "00 11 AA BB" -c) -ne $count ]; then
+    error_exit "CAN0 to CAN1 Fail"
+elif [ $(cat CANtestResult.txt | grep "11 00 BB AA" -c) -ne $count ]; then
+    error_exit "CAN1 to CAN0 Fail"
+elif [ $(cat CANtestResult.txt | grep "22 33 CC DD" -c) -ne $count ]; then
+    error_exit "CAN2 to CAN3 Fail"
+elif [ $(cat CANtestResult.txt | grep "33 22 DD CC" -c) -ne $count ]; then
+    error_exit "CAN3 to CAN2 Fail"
+elif [ $(cat CANtestResult.txt | grep "44 55 EE FF" -c) -ne $count ]; then
+    error_exit "CAN4 to CAN5 Fail"
+elif [ $(cat CANtestResult.txt | grep "55 44 FF EE" -c) -ne $count ]; then
+    error_exit "CAN5 to CAN4 Fail"
+elif [ $(cat CANtestResult.txt | grep "66 77 AB CD" -c) -ne $count ]; then
+    error_exit "CAN6 to CAN7 Fail"
+elif [ $(cat CANtestResult.txt | grep "77 66 CD AB" -c) -ne $count ]; then
+    error_exit "CAN7 to CAN6 Fail"
+fi
+
+echo "PCAN (CAN0 ~ CAN7) test are all pass."
+
+## [GPU]
+echo ""
+echo "Start [GPU] test ..."
+echo ""
+
+echo ""
+echo "nvidia-smi -i 0 ..."
+if nvidia-smi -i 0
+then
+    echo "GPU 0 is pass."
+else
+    error_exit "GPU 0 is fail."
+fi
+
+echo ""
+echo "nvidia-smi -i 1 ..."
+if nvidia-smi -i 1
+then
+    echo "GPU 1 is pass."
+else
+    error_exit "GPU 1 is fail."
+fi
+
+echo ""
+echo "nvidia-smi -i 2 ..."
+if nvidia-smi -i 2
+then
+    echo "GPU 2 is pass."
+else
+    error_exit "GPU 2 is fail."
+fi
+
+~/gpu_burn 10 &> /dev/null
+if [ $? -eq 0 ]; then
+    echo "gpu_burn is pass."
+elif [ $? -eq 111 ]; then
+    error_exit "gpu_burn is fail: Failure during compute."
+elif [ $? -eq 123 ]; then
+    error_exit "gpu_burn is fail: No clients are alive."
+elif [ $? -eq 124 ]; then
+    error_exit "gpu_burn is fail: Couldn't init a GPU test."
+else
+    error_exit "gpu_burn is fail."
+fi
+
+## [restore network]
+echo $SudoPW | sudo -S cp -f /etc/network/interfaces.org /etc/network/interfaces
+
+## [finish]
+printf "\E[1;33;44m" 
+echo ""
+echo ">>> final_test is finished."
+read -rsp $'>>> Press any key to shutdown ...\n' -n 1 key
+echo "Pass"
+sync
+echo $SudoPW | sudo -S poweroff
+sync
+exit 0
+
