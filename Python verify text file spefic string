@@ -1,0 +1,15 @@
+import os
+import sys
+osgg = "C:\\123.txt"
+if os.path.exists(osgg):
+    os.remove(osgg)
+#response = os.system("ping 172.17.196.55 >> C:\\123.txt")
+response = os.system("ping 127.0.0.1 >> C:\\123.txt")
+
+with open (osgg) as f:
+    if "TTL" in f.read():
+        print "PING PASS"
+    else:
+        print "PING FAIL"
+        
+    f.close()
